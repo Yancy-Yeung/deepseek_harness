@@ -1,3 +1,7 @@
+# Optimization directions:
+1. CICD generation facilitates local deployment on NAS;
+2. Images are transmitted to large models with visual capabilities to facilitate communication;
+
 # DeepSeek Harness
 
 English | [中文](README.zh.md)
