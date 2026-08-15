@@ -70,11 +70,17 @@ jobs:
           $src = $pwd.Path
           # robocopy skips node_modules (pnpm keeps deps inside package trees)
           # and .git; copying them first would waste minutes on the runner.
+          # robocopy exit codes are bit flags: 0-7 are success (1 = files
+          # copied, 4 = mismatches) while 8+ mean copy errors or a fatal
+          # error. The runner treats any non-zero process exit as failure,
+          # so normalize the success range to 0 and propagate real errors.
           foreach ($d in @('package.json','pnpm-workspace.yaml','pnpm-lock.yaml',
                            'packages','apps','native','patches','scripts',
                            'vendor','examples','website','python')) {
             robocopy "$src\$d" "$root\$d" /E /XD node_modules .git /NFL /NDL `
               /NJH /NJS /NC /NS | Out-Null
+            if ($LASTEXITCODE -ge 8) { exit $LASTEXITCODE }
+            $LASTEXITCODE = 0
           }
 
       - name: Install workspace deps into the bundle
