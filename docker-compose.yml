@@ -4,9 +4,25 @@
 
 services:
   dsh:
+    # 国内拉取镜像用 ghcr.nju.edu.cn 替换 ghcr.io
     image: ghcr.nju.edu.cn/yancy-yeung/deepseek-harness:latest
     container_name: deepseek-harness
     restart: unless-stopped
+
+    # Host networking: the container shares the NAS's network, so the Web UI
+    # is reachable at http://<NAS-IP>:3080 and the app's LAN-IP trust fence
+    # sees the NAS's real address — no extra configuration needed. The image
+    # seeds these defaults on first boot (./data/cordis.patch.yml).
+    network_mode: host
+
+    # Bridge alternative (pick one mode; delete `network_mode: host` above):
+    #   ports:
+    #     - "3080:3080"
+    #   environment:
+    #     # The browser's Host header then carries the NAS IP/DNS name, which
+    #     # the /api trust fence does not recognize — declare it here (it
+    #     # merges with the LAN IPs the process derives itself):
+    #     DSH_TRUSTED_HOSTS: "192.168.1.5"   # comma-separated if several
 
     environment:
       # Required — your DeepSeek API key. Obtain from https://platform.deepseek.com/keys .
@@ -17,4 +33,13 @@ services:
       # PUPPETEER_SKIP_DOWNLOAD: "true"
 
     volumes:
-      - ./data:/home/dshuser/data   # persistent workspace for tools, files, sessions. mount your own path if needed.
+      # Persistent harness home: sessions, settings, credentials, profiles,
+      # and the first-boot LAN-bind defaults (./data/cordis.patch.yml — edit
+      # it to change the Web UI bind port or trusted authorities).
+      # Note: the old template mounted at /home/dshuser/data, which the app
+      # never reads — the harness home is $DSH_HOME (here ~/.dsh).
+      - ./data:/home/dshuser/.dsh
+
+      # Optional — a workspace the agent can read and write on the host,
+      # mounted somewhere inside the container, then opened in the Web UI:
+      # - ./workspace:/home/dshuser/workspace

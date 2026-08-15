@@ -2,6 +2,9 @@ name: Build & Push Docker image
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - main
 
 permissions:
   contents: write
@@ -11,6 +14,7 @@ permissions:
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
+    timeout-minutes: 60
 
     steps:
       - name: Checkout source code (main)
@@ -38,11 +42,18 @@ jobs:
         with:
           context: .
           file: ./Dockerfile
+          # linux/amd64 covers x86_64 NAS units (DSM x64). ARM NAS units: add
+          # linux/arm64 — node-pty/koffi then compile under QEMU and the
+          # build takes considerably longer.
           platforms: linux/amd64
-          tags: ${{ steps.meta.outputs.image }}:latest
+          tags: |
+            ${{ steps.meta.outputs.image }}:latest
+            ${{ steps.meta.outputs.image }}:${{ github.sha }}
           labels: |
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.revision=${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
           push: true
 
       - name: Cleanup old workflow runs (keep last 5)
