@@ -1,4 +1,4 @@
-FROM node:22-slim AS builder
+FROM node:24-slim AS builder
 
 ENV PNPM_HOME="/pnpm" PATH="$PNPM_HOME:$PATH" PUPPETEER_SKIP_DOWNLOAD=true NODE_ENV="production"
 
@@ -9,7 +9,8 @@ RUN corepack enable pnpm \
     && echo "storeDir: ~/.pnpm-store" > .npmrc \
     && pnpm config set store-dir ~/.pnpm-store
 
-COPY --link package.json pnpm-workspace.yaml ./
+COPY --link package.json pnpm-workspace.yaml pnpm-lock.yaml ./
+COPY --link patches/ ./patches/
 COPY --link tsconfig*.json ./
 
 # cache deps first (lockfile-only layer)
@@ -24,7 +25,7 @@ COPY --link python/     ./python/
 RUN corepack enable pnpm \
     && NODE_OPTIONS="--max-old-space-size=4096" pnpm run build
 
-FROM node:22-slim AS final
+FROM node:24-slim AS final
 
 ENV PNPM_HOME="/pnpm" PATH="$PNPM_HOME:$PATH" PUPPETEER_SKIP_DOWNLOAD=true NODE_ENV="production" DEEPSEEK_API_KEY=""
 
