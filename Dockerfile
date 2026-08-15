@@ -38,7 +38,9 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 RUN corepack enable pnpm \
-    && groupadd -r dshuser && useradd -r -g dshuser -d /home/dshuser -s /usr/sbin/nologin dshuser
+    && groupadd -r dshuser && useradd -r -g dshuser -d /home/dshuser -s /usr/sbin/nologin dshuser \
+    && mkdir -p /home/dshuser/.cache/node/corepack/v1 \
+    && chown -R dshuser:dshuser /home/dshuser
 
 WORKDIR /app
 
