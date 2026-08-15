@@ -1,73 +1,166 @@
-name: Build & Push Docker image
+name: Build portable Windows bundle
 
 on:
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'GitHub Release tag to publish the portable Windows build to (e.g. v0.1.0-portable). Leave empty to only build the artifact.'
+        required: false
   push:
     branches:
       - main
 
 permissions:
   contents: write
-  packages: write
-  actions: write
 
 jobs:
-  build-and-push:
-    runs-on: ubuntu-latest
-    timeout-minutes: 60
+  # Portable Windows build: a zero-install USB folder (node.exe + full
+  # workspace + start.bat) assembled on a Windows runner so platform binaries
+  # (sharp, esbuild, node-pty, ...) match win32-x64. Runs on every push and
+  # manual dispatch; publish to a GitHub Release only when release_tag is set.
+  #
+  # Assembly strategy: copy the built workspace (excluding node_modules/.git)
+  # into the bundle and run a full `pnpm install --frozen-lockfile` inside it.
+  # A full install is required, not --prod: workspace peer dependencies
+  # (the vendored @deepseek-ai/cordis family) are only linked by the full
+  # resolver, and pnpm deploy is unreliable here (drops transitive workspace
+  # links on Windows). The install reuses the store populated by the earlier
+  # workspace-wide install, so it is fast and does not re-download.
+  build-portable-windows:
+    runs-on: windows-latest
+    timeout-minutes: 90
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout source code (main)
         uses: actions/checkout@v7
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
-
-      - name: Login to GitHub Container Registry
-        uses: docker/login-action@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
         with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          node-version: 24
 
-      - name: Set lowercase repository owner and image name
-        id: meta
+      - name: Enable pnpm via corepack
+        run: corepack enable
+
+      - name: Install dependencies (populates the pnpm store)
+        run: pnpm install --frozen-lockfile
+
+      - name: Build (host lib + client lib + web dist)
+        run: pnpm run build
+
+      - name: Download portable Node.js runtime (same version as the build)
+        shell: pwsh
         run: |
-          owner=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')
-          echo "owner=$owner" >> "$GITHUB_OUTPUT"
-          echo "image=ghcr.io/$owner/deepseek-harness" >> "$GITHUB_OUTPUT"
+          $version = node -p "process.versions.node"
+          $url = "https://nodejs.org/dist/v$version/node-v$version-win-x64.zip"
+          $zip = "$env:RUNNER_TEMP\node-win-x64.zip"
+          Invoke-WebRequest -Uri $url -OutFile $zip
+          Expand-Archive -Path $zip -DestinationPath "$env:RUNNER_TEMP\portable" -Force
+          $dir = Get-ChildItem "$env:RUNNER_TEMP\portable" -Directory |
+            Where-Object Name -like 'node-v*' | Select-Object -First 1
+          Move-Item $dir.FullName "$env:RUNNER_TEMP\portable\node"
+          Remove-Item $zip
 
-      - name: Build and push image
-        uses: docker/build-push-action@v7
-        with:
-          context: .
-          file: ./Dockerfile
-          # linux/amd64 covers x86_64 NAS units (DSM x64). ARM NAS units: add
-          # linux/arm64 — node-pty/koffi then compile under QEMU and the
-          # build takes considerably longer.
-          platforms: linux/amd64
-          tags: |
-            ${{ steps.meta.outputs.image }}:latest
-            ${{ steps.meta.outputs.image }}:${{ github.sha }}
-          labels: |
-            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
-            org.opencontainers.image.revision=${{ github.sha }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-          push: true
+      - name: Copy workspace into the bundle
+        shell: pwsh
+        run: |
+          $root = "$env:RUNNER_TEMP\portable"
+          $src = $pwd.Path
+          # robocopy skips node_modules (pnpm keeps deps inside package trees)
+          # and .git; copying them first would waste minutes on the runner.
+          foreach ($d in @('package.json','pnpm-workspace.yaml','pnpm-lock.yaml',
+                           'packages','apps','native','patches','scripts',
+                           'vendor','examples','website','python')) {
+            robocopy "$src\$d" "$root\$d" /E /XD node_modules .git /NFL /NDL `
+              /NJH /NJS /NC /NS | Out-Null
+          }
 
-      - name: Cleanup old workflow runs (keep last 5)
-        if: always()
-        uses: Mattraks/delete-workflow-runs@main
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          repository: ${{ github.repository }}
-          retain_days: 0
-          keep_minimum_runs: 5
+      - name: Install workspace deps into the bundle
+        shell: pwsh
+        run: |
+          Push-Location "$env:RUNNER_TEMP\portable"
+          pnpm install --frozen-lockfile --ignore-scripts
+          Pop-Location
 
-      - name: Cleanup artifacts after workflow completes
-        if: always() && !failure()
-        uses: geekyeggo/delete-artifact@v5
+      - name: Smoke-test the bundled CLI
+        shell: pwsh
+        run: node apps\cli\lib\bin.js --help | Select-Object -First 3
+
+      - name: Assemble portable layout (data dir, start.bat, README)
+        shell: pwsh
+        run: |
+          $root = "$env:RUNNER_TEMP\portable"
+          New-Item -ItemType Directory -Path "$root\data" -Force | Out-Null
+          @'
+          @echo off
+          setlocal
+          cd /d "%~dp0"
+          set "DSH_HOME=%~dp0data"
+          "%~dp0node\node.exe" "%~dp0apps\cli\lib\bin.js" web
+          '@ | Set-Content -Path "$root\start.bat" -Encoding ASCII
+          @'
+          DeepSeek Harness - portable Windows build
+          =========================================
+
+          What this is
+          ------------
+          A zero-install copy of the DeepSeek Harness Web UI. No Node.js, npm,
+          or pnpm is required on the machine you run it on - only this folder
+          and a browser.
+
+          Quick start
+          -----------
+          1. Double-click start.bat (or run it from a terminal).
+          2. Wait for the server to report it is listening on http://127.0.0.1:3080.
+          3. Open http://localhost:3080 in your browser.
+
+          Data and settings
+          -----------------
+          Sessions, settings, and credentials live in the data\ folder next to
+          this file, so they stay with the USB drive when you move it. Delete
+          data\ to reset to a fresh install.
+
+          Configuration
+          -------------
+          - Set DEEPSEEK_API_KEY as an environment variable before starting, or
+            add your key through the Web UI settings after it is running.
+          - Advanced options (bind host, trusted hosts) go in data\cordis.patch.yml
+            after the first run; see the project README for the format.
+
+          Notes
+          -----
+          - The server binds 127.0.0.1 only: it is reachable from this machine
+            and never exposed to the local network.
+          - Requires a 64-bit x86 Windows (7+). No admin rights needed.
+          - First start is slower while the profile is prepared; subsequent
+            starts are fast.
+          '@ | Set-Content -Path "$root\README.txt" -Encoding UTF8
+
+      - name: Archive portable build
+        shell: pwsh
+        run: |
+          # 7-Zip ships on windows-latest runners and beats Compress-Archive
+          # on both speed and ratio for this multi-GB tree.
+          Push-Location "$env:RUNNER_TEMP\portable"
+          & "C:\Program Files\7-Zip\7z.exe" a -tzip -mx=5 `
+            "$env:GITHUB_WORKSPACE\dsh-portable-win-x64.zip" * | Out-Null
+          Pop-Location
+
+      - name: Upload portable artifact
+        uses: actions/upload-artifact@v4
         with:
-          name: '*'
-          failOnError: false
+          name: dsh-portable-win-x64
+          path: dsh-portable-win-x64.zip
+          if-no-files-found: error
+
+      - name: Publish to GitHub Release
+        if: github.event_name == 'workflow_dispatch' && inputs.release_tag != ''
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dsh-portable-win-x64.zip
+          tag_name: ${{ inputs.release_tag }}
+          name: DeepSeek Harness ${{ inputs.release_tag }} (portable Windows)
+          prerelease: true
+          generate_release_notes: true
