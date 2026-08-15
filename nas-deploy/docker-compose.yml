@@ -1,0 +1,20 @@
+# DeepSeek Harness — NAS (Synology) deployment template.
+# Copy this file into your Synology Docker project directory, edit the values,
+# and paste it into "Compose configuration".
+
+services:
+  dsh:
+    image: ghcr.io/yancy-yeung/deepseek-harness:latest
+    container_name: deepseek-harness
+    restart: unless-stopped
+
+    environment:
+      # Required — your DeepSeek API key. Obtain from https://platform.deepseek.com/keys .
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY}
+
+      # Optional tuning knobs (all commented out by default):
+      # NODE_ENV: production
+      # PUPPETEER_SKIP_DOWNLOAD: "true"
+
+    volumes:
+      - ./data:/home/dshuser/data   # persistent workspace for tools, files, sessions. mount your own path if needed.
