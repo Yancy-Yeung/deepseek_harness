@@ -1,6 +1,6 @@
 FROM node:24-slim AS builder
 
-ENV PNPM_HOME="/pnpm" PATH="$PNPM_HOME:$PATH" PUPPETEER_SKIP_DOWNLOAD=true NODE_ENV="production"
+ENV PNPM_HOME="/pnpm" PATH="$PNPM_HOME:$PATH" PUPPETEER_SKIP_DOWNLOAD=true CI="true"
 
 WORKDIR /app
 
@@ -11,6 +11,7 @@ RUN corepack enable pnpm \
 
 COPY --link package.json pnpm-workspace.yaml pnpm-lock.yaml ./
 COPY --link patches/ ./patches/
+COPY --link scripts/ ./scripts/
 COPY --link tsconfig*.json ./
 
 # cache deps first (lockfile-only layer)
