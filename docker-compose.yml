@@ -4,7 +4,7 @@
 
 services:
   dsh:
-    image: ghcr.io/yancy-yeung/deepseek-harness:latest
+    image: ghcr.nju.edu.cn/yancy-yeung/deepseek-harness:latest
     container_name: deepseek-harness
     restart: unless-stopped
 

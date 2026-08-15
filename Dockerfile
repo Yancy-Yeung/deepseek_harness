@@ -44,8 +44,9 @@ RUN corepack enable pnpm \
 
 WORKDIR /app
 
-# copy the whole built monorepo so workspace refs resolve correctly.
-COPY --from=builder --chown=dshuser:dshuser . ./
+# Copy the built monorepo from the builder. The builder's WORKDIR is /app,
+# so we copy from /app there, not from /.
+COPY --from=builder --chown=dshuser:dshuser /app .
 
 USER dshuser
 
