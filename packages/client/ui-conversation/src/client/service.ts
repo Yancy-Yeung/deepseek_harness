@@ -9,6 +9,9 @@
  */
 import { Service } from '@deepseek-ai/cordis'
 import type { Context } from '@deepseek-ai/cordis'
+// Value import from the inline-safe wire layer (bundle purity allows it):
+// randomUuid works on insecure origins where crypto.randomUUID is absent.
+import { randomUuid } from '@deepseek-ai/dsh-host-apiproxy/client'
 // Type-only imports: a plugin-to-plugin value import is a bundle purity
 // error, so scope resolution goes through the sessions service (scopeOf
 // method) instead of the standalone helper.
@@ -62,7 +65,7 @@ export interface IConversation {
 function browserDraftAttachment(file: File): ComposerAttachment {
   return {
     kind: 'image',
-    id: crypto.randomUUID() as DraftAttachmentId,
+    id: randomUuid() as DraftAttachmentId,
     previewUrl: URL.createObjectURL(file),
     file,
   }

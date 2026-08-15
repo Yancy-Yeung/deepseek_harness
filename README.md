@@ -18,7 +18,7 @@ DeepSeek Harness is currently in _developer preview_ and is iterating rapidly. *
 
 ### Run from `npm`
 
-Install `Node.js`, then run:
+Install `Node.js`, >= V24 then run:
 
 ```sh
 npx @deepseek-ai/dsh web
@@ -33,6 +33,7 @@ To run from a repository checkout:
 ```sh
 git clone https://github.com/Yancy-Yeung/deepseek_harness.git
 cd deepseek_harness
+npm install -g pnpm
 pnpm install
 pnpm run build
 pnpm dsh web

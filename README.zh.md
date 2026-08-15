@@ -18,7 +18,7 @@ DeepSeek Harness 目前处于 _开发者预览_ 阶段，正在快速迭代。**
 
 ### 通过 `npm` 运行
 
-安装 `Node.js`，然后运行：
+安装 `Node.js`，>= V24 然后运行：
 
 ```sh
 npx @deepseek-ai/dsh web
@@ -33,6 +33,7 @@ npx @deepseek-ai/dsh web
 ```sh
 git clone https://github.com/Yancy-Yeung/deepseek_harness.git
 cd deepseek_harness
+npm install -g pnpm
 pnpm install
 pnpm run build
 pnpm dsh web

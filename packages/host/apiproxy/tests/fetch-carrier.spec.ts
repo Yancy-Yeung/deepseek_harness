@@ -803,3 +803,28 @@ describe('resolveBase', () => {
     }
   })
 })
+
+describe('rpcId minting without a secure context', () => {
+  it('mints an RFC 4122 v4 rpcId from crypto.getRandomValues alone', async () => {
+    // Browsers expose crypto.randomUUID only on secure contexts; a plain-HTTP
+    // LAN page has just getRandomValues, and every wire call must still work.
+    vi.stubGlobal('crypto', {
+      getRandomValues(bytes: Uint8Array) {
+        return bytes.fill(0)
+      },
+    })
+    try {
+      const c = client()
+      const rpcIds: string[] = []
+      c.subscribeEnvelopes((batch) => {
+        for (const message of batch) {
+          if (message.type === 'client-request') rpcIds.push(message.rpcId)
+        }
+      })
+      await c.sessions.list({})
+      expect(rpcIds).toEqual(['00000000-0000-4000-8000-000000000000'])
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+})
