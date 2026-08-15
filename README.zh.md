@@ -1,5 +1,5 @@
 # Optimization directions:
-1. CICD生成进行便于NAS本地部署；
+1. CICD生成Release；
 2. 图片传递给具有视觉能力的大模型，便于交流；
 
 # DeepSeek Harness

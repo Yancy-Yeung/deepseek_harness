@@ -1,5 +1,5 @@
 # Optimization directions:
-1. CICD generation facilitates local deployment on NAS;
+1. CICD Release;
 2. Images are transmitted to large models with visual capabilities to facilitate communication;
 
 # DeepSeek Harness
