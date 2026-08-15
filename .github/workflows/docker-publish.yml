@@ -1,8 +1,7 @@
 name: Build & Push Docker image
 
-# on:
-#   push:
-#     branches: [main, master]
+on:
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -14,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout source code
+      - name: Checkout source code (main)
         uses: actions/checkout@v7
 
       - name: Set up Docker Buildx
