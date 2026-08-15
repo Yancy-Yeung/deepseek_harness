@@ -68,20 +68,31 @@ jobs:
         run: |
           $root = "$env:RUNNER_TEMP\portable"
           $src = $pwd.Path
-          # robocopy skips node_modules (pnpm keeps deps inside package trees)
-          # and .git; copying them first would waste minutes on the runner.
+          # robocopy only accepts directory sources, so copy the workspace
+          # files with Copy-Item and the directories with robocopy. Both
+          # skip node_modules (pnpm keeps deps inside package trees) and
+          # .git; copying them first would waste minutes on the runner.
+          $files = @('package.json','pnpm-workspace.yaml','pnpm-lock.yaml')
+          $dirs  = @('packages','apps','native','patches','scripts',
+                     'vendor','examples','website','python')
+          foreach ($f in $files) {
+            Copy-Item "$src\$f" "$root\$f" -Force
+          }
           # robocopy exit codes are bit flags: 0-7 are success (1 = files
           # copied, 4 = mismatches) while 8+ mean copy errors or a fatal
-          # error. The runner treats any non-zero process exit as failure,
-          # so normalize the success range to 0 and propagate real errors.
-          foreach ($d in @('package.json','pnpm-workspace.yaml','pnpm-lock.yaml',
-                           'packages','apps','native','patches','scripts',
-                           'vendor','examples','website','python')) {
+          # error. Normalize the success range to 0, fail loud on real
+          # errors, and exit explicitly so no pwsh exit-code quirk can turn
+          # a passing step red on the runner.
+          foreach ($d in $dirs) {
             robocopy "$src\$d" "$root\$d" /E /XD node_modules .git /NFL /NDL `
               /NJH /NJS /NC /NS | Out-Null
-            if ($LASTEXITCODE -ge 8) { exit $LASTEXITCODE }
+            if ($LASTEXITCODE -ge 8) {
+              Write-Error "robocopy failed to copy '$d' (exit code $LASTEXITCODE)"
+              exit 1
+            }
             $LASTEXITCODE = 0
           }
+          exit 0
 
       - name: Install workspace deps into the bundle
         shell: pwsh
