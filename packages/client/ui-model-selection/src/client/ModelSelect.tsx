@@ -289,7 +289,9 @@ export function ModelSelect(
                   return (
                     <section role="group" aria-labelledby={headingId} className={css.group} key={group.id}>
                       <div className={css.groupTitle} id={headingId}>{group.name}</div>
-                      {group.models.map((model) => {
+                      {/* Sorted by display name: the directory returns catalog
+                          order, which is arbitrary to a user picking by name. */}
+                      {[...group.models].sort((a, b) => a.name.localeCompare(b.name)).map((model) => {
                         const selected = state.current?.provider === group.id && state.current.model === model.id
                         return (
                           <button

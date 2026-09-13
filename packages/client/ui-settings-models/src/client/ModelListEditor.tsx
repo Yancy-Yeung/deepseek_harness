@@ -247,11 +247,12 @@ export function ModelListEditor(props: ModelListEditorProps): ReactNode {
         setFailure(t('fetchEmpty'))
         return
       }
-      // Everything already configured starts unchecked, so adopting a
-      // selection never silently rewrites a capacity the user corrected.
-      const known = new Set(models.map(model => textOf(model, 'id')))
-      setCandidates(found)
-      setPicked(new Set(found.filter(model => !known.has(model.id)).map(model => model.id)))
+      // Everything starts unchecked: the reply is candidates, and which ones
+      // become configuration is the user's choice, not a default adoption.
+      // Sorted by id so the dialog reads alphabetically and a target is
+      // findable by eye instead of by the provider's own reply order.
+      setCandidates([...found].sort((a, b) => a.id.localeCompare(b.id)))
+      setPicked(new Set())
     } catch (error) {
       // The transport rejected rather than answering; without this the button
       // would stay busy with nothing shown.
