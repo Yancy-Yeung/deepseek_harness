@@ -1,5 +1,5 @@
 /**
- * Node 22 startup-output smoke for the shipped Web CLI composition.
+ * Node 24 startup-output smoke for the shipped Web CLI composition.
  *
  * Only the dedicated Node compatibility gate opts this test in after building
  * both artifacts; ordinary Vitest inventory deterministically skips it.
@@ -57,6 +57,7 @@ function runBuiltWeb(cwd: string): Promise<{ stdout: string; stderr: string; cod
     const child = spawn(process.execPath, [
       builtBin,
       'web',
+      '--no-open',
       '--host',
       '127.0.0.1',
       '--port',

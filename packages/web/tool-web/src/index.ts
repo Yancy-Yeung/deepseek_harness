@@ -2,17 +2,19 @@
  * Model-facing `web_search` and `web_fetch` tools over `ctx.web`. This package owns schemas,
  * validation, prompt guidance, limits, and presentation, never concrete providers. Enablement
  * controls tool registration; an enabled tool remains visible when its provider is unavailable
- * and fails with a structured error at execution time.
+ * and fails with a structured error at execution time. A model step does not admit
+ * `web_search` or `web_fetch` while `ctx.web.searchReady()` or `ctx.web.fetchReady()`
+ * reports that the selected provider cannot authenticate for that step's chat route.
  * @module @deepseek-ai/dsh-tool-web
  */
 
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import type {} from '@deepseek-ai/dsh-web'
-import { applyWebSearchTool, WEB_SEARCH_MAX_RESULTS } from './search.ts'
+import { applyWebSearchTool, WEB_SEARCH_MAX_QUERIES, WEB_SEARCH_MAX_RESULTS, WEB_SEARCH_SUMMARY_MAX_CHARS } from './search.ts'
 import { applyWebFetchTool } from './fetch.ts'
 
-export { WEB_SEARCH_MAX_RESULTS, applyWebSearchTool, formatSearchOutput, parseSearchArgs, presentSearchCall, presentSearchResult, searchMetaFromValue, searchMetaFromResult } from './search.ts'
+export { WEB_SEARCH_MAX_QUERIES, WEB_SEARCH_MAX_RESULTS, applyWebSearchTool, formatSearchOutput, presentSearchCall, presentSearchResult, searchMetaFromValue, searchMetaFromResult } from './search.ts'
 export type { WebSearchMeta } from './search.ts'
 export { applyWebFetchTool, formatFetchOutput, parseFetchArgs, presentFetchCall, presentFetchResult, fetchMetaFromValue, fetchMetaFromResult } from './fetch.ts'
 export type { WebFetchMeta } from './fetch.ts'
@@ -33,7 +35,7 @@ export const DEFAULT_WEB_TOOL_TIMEOUT_MS = 30_000
  */
 export const DEFAULT_FETCH_MAX_OUTPUT_CHARS = 200_000
 
-/** Plugin config: which web tools to register, the source cap, per-tool budgets, and the fetch output cap. */
+/** Plugin config: which web tools to register, search bounds, per-tool budgets, and the fetch output cap. */
 export interface Config {
   /** Register `web_search`. Defaults to true. */
   search?: boolean
@@ -41,6 +43,10 @@ export interface Config {
   fetch?: boolean
   /** Upper bound on sources returned by one `web_search` call. */
   searchMaxResults?: number
+  /** Upper bound on queries accepted by one `web_search` call. */
+  searchMaxQueries?: number
+  /** Cap on each source summary in `web_search` output, in characters. Defaults to 800. */
+  searchSummaryMaxChars?: number
   /** Cooperative timeout budget (ms) for `web_fetch`. Defaults to 30000. */
   fetchTimeoutMs?: number
   /** Cooperative timeout budget (ms) for `web_search`. Defaults to 30000. */
@@ -53,6 +59,8 @@ export const Config: z<Config> = z.object({
   search: z.boolean().default(true),
   fetch: z.boolean().default(true),
   searchMaxResults: z.number().default(WEB_SEARCH_MAX_RESULTS),
+  searchMaxQueries: z.number().default(WEB_SEARCH_MAX_QUERIES),
+  searchSummaryMaxChars: z.number().default(WEB_SEARCH_SUMMARY_MAX_CHARS),
   fetchTimeoutMs: z.number().default(DEFAULT_WEB_TOOL_TIMEOUT_MS),
   searchTimeoutMs: z.number().default(DEFAULT_WEB_TOOL_TIMEOUT_MS),
   fetchMaxOutputChars: z.number().default(DEFAULT_FETCH_MAX_OUTPUT_CHARS),
@@ -81,11 +89,15 @@ export function apply(ctx: Context, config: Config): void {
   // schemastery (Config) has already filled every defaulted field.
   const resolved = config as ResolvedConfig
   assertPositiveInteger('searchMaxResults', resolved.searchMaxResults)
+  assertPositiveInteger('searchMaxQueries', resolved.searchMaxQueries)
+  assertPositiveInteger('searchSummaryMaxChars', resolved.searchSummaryMaxChars)
   assertPositiveInteger('fetchTimeoutMs', resolved.fetchTimeoutMs)
   assertPositiveInteger('searchTimeoutMs', resolved.searchTimeoutMs)
   assertPositiveInteger('fetchMaxOutputChars', resolved.fetchMaxOutputChars)
   if (resolved.search) {
-    applyWebSearchTool(ctx, resolved.searchMaxResults, resolved.searchTimeoutMs, resolved.fetch)
+    applyWebSearchTool(
+      ctx, resolved.searchMaxResults, resolved.searchMaxQueries, resolved.searchSummaryMaxChars, resolved.searchTimeoutMs, resolved.fetch,
+    )
   }
   if (resolved.fetch) applyWebFetchTool(ctx, resolved.fetchTimeoutMs, resolved.fetchMaxOutputChars)
 }
